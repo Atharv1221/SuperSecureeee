@@ -1,0 +1,1797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Private Space</title>
+<meta name="description" content="A private, one-way message archive.">
+<meta name="robots" content="noindex, nofollow">
+
+<style>
+  /* =========================================================
+     THEME / DESIGN TOKENS
+  ========================================================= */
+  :root{
+    --background:#f5f7fb;
+    --surface:#ffffff;
+    --surface-2:#fbfbfe;
+    --text:#16181d;
+    --muted:#7b8190;
+    --accent:#5b6cff;
+    --accent-2:#8b6cff;
+    --accent-light:#eef0ff;
+    --border:rgba(0,0,0,0.08);
+    --shadow-sm:0 1px 2px rgba(16,20,30,.06);
+    --shadow-md:0 8px 24px rgba(16,20,30,.08);
+    --shadow-lg:0 20px 60px rgba(16,20,30,.16);
+    --danger:#e5484d;
+    --success:#2fb380;
+    --radius-lg:22px;
+    --radius-md:16px;
+    --radius-sm:10px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    color-scheme: light;
+  }
+
+  *,*::before,*::after{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ height:100%; }
+  html{ touch-action:manipulation; }
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 600px at 20% -10%, #eef0ff 0%, transparent 60%),
+      radial-gradient(1000px 500px at 100% 0%, #f3eaff 0%, transparent 55%),
+      var(--background);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+  }
+  button{ font-family:inherit; touch-action:manipulation; }
+  .hidden{ display:none !important; }
+  .sr-only{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+
+  /* focus visibility */
+  a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible{
+    outline:2px solid var(--accent);
+    outline-offset:2px;
+  }
+
+  /* =========================================================
+     APP SHELL — centers the "messenger window" on desktop
+  ========================================================= */
+  #app{
+    height:100dvh;
+    width:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+  }
+  .screen{
+    position:relative;
+    width:100%;
+    height:100dvh;
+    max-width:480px;
+    background:var(--surface);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  @media (min-width:560px){
+    #app{ padding:28px; }
+    .screen{
+      width:min(480px, 94vw);
+      height:min(860px, 92dvh);
+      border-radius:28px;
+      box-shadow:var(--shadow-lg);
+      border:1px solid var(--border);
+    }
+  }
+  /* Roomier card on tablets/desktops with space to spare */
+  @media (min-width:820px){
+    .screen{ width:min(520px, 90vw); }
+  }
+  /* Very narrow phones (e.g. 320px-wide devices) */
+  @media (max-width:359px){
+    .messages-container{ padding:14px 10px 96px; }
+    .bubble, .voice-bubble{ padding:10px 12px 8px; }
+  }
+  /* Short/landscape viewports: let content scroll instead of clipping */
+  @media (max-height:600px){
+    .lock-screen{ overflow-y:auto; padding:18px 24px; }
+    .lock-card{ padding:8px 0; }
+    .lock-footnote{ margin-top:12px; }
+  }
+  @media (max-height:480px){
+    .lock-footnote{ display:none; }
+  }
+
+  /* =========================================================
+     LOCK SCREEN
+  ========================================================= */
+  .lock-screen{
+    align-items:center;
+    justify-content:center;
+    background:
+      radial-gradient(600px 300px at 50% 0%, var(--accent-light), transparent 60%),
+      var(--surface);
+    padding:32px 24px;
+  }
+  .lock-card{
+    width:100%;
+    max-width:320px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    text-align:center;
+    animation: rise .5s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .lock-icon{
+    width:clamp(48px, 14vh, 64px); height:clamp(48px, 14vh, 64px);
+    display:flex; align-items:center; justify-content:center;
+    font-size:26px;
+    border-radius:50%;
+    background:linear-gradient(160deg,var(--accent-light),#ffffff);
+    box-shadow:var(--shadow-md), inset 0 0 0 1px var(--border);
+    margin-bottom:clamp(10px, 3vh, 18px);
+  }
+  .lock-card h1{
+    font-size:22px; margin:0 0 4px;
+    letter-spacing:-.01em;
+  }
+  .lock-sub{
+    margin:0 0 clamp(14px, 4vh, 26px);
+    color:var(--muted);
+    font-size:14px;
+  }
+
+  /* PIN dots */
+  .pin-dots{
+    display:flex; gap:14px; margin-bottom:clamp(14px, 4vh, 26px); min-height:22px;
+  }
+  .pin-dot{
+    width:14px; height:14px; border-radius:50%;
+    border:1.5px solid var(--border);
+    background:var(--surface-2);
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:600; color:var(--text);
+    transition: transform .15s ease, background .15s ease, border-color .15s ease;
+  }
+  .pin-dot.filled{
+    background:var(--accent);
+    border-color:var(--accent);
+    transform:scale(1.08);
+  }
+  .pin-dot.reveal{ background:var(--accent-light); border-color:var(--accent); color:var(--accent); }
+  .pin-dots.shake{ animation: shake .4s ease; }
+  @keyframes shake{
+    10%,90%{ transform:translateX(-1px); }
+    20%,80%{ transform:translateX(2px); }
+    30%,50%,70%{ transform:translateX(-6px); }
+    40%,60%{ transform:translateX(6px); }
+  }
+
+  .pin-keypad{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:clamp(8px, 2.2vh, 12px);
+    width:100%;
+    margin-bottom:clamp(14px, 4vh, 22px);
+  }
+  .pin-key{
+    aspect-ratio:1/1;
+    border:none;
+    border-radius:50%;
+    background:var(--surface-2);
+    box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--border);
+    font-size:20px;
+    font-weight:500;
+    color:var(--text);
+    min-height:44px; min-width:44px;
+    max-height:64px;
+    cursor:pointer;
+    transition: transform .1s ease, background .1s ease, box-shadow .1s ease;
+  }
+  .pin-key:hover{ background:var(--accent-light); }
+  .pin-key:active{ transform:scale(.92); background:var(--accent-light); }
+  .pin-key.pin-key-ghost{ background:transparent; box-shadow:none; color:var(--muted); font-size:14px; }
+  .pin-key.pin-key-ghost:hover{ background:var(--surface-2); }
+
+  .btn-primary{
+    width:100%;
+    padding:14px 20px;
+    border:none;
+    border-radius:var(--radius-md);
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    color:#fff;
+    font-size:15px;
+    font-weight:600;
+    cursor:pointer;
+    box-shadow:0 10px 24px -8px rgba(91,108,255,.6);
+    transition: transform .1s ease, box-shadow .1s ease, opacity .1s ease;
+    min-height:44px;
+  }
+  .btn-primary:hover{ transform:translateY(-1px); }
+  .btn-primary:active{ transform:translateY(0) scale(.99); }
+  .btn-primary:disabled{ opacity:.55; cursor:not-allowed; transform:none; }
+
+  .pin-error{
+    min-height:20px;
+    margin:14px 0 0;
+    color:var(--danger);
+    font-size:13px;
+    font-weight:500;
+    opacity:0;
+    transition:opacity .2s ease;
+  }
+  .pin-error.show{ opacity:1; }
+
+  .lock-footnote{
+    margin-top:22px;
+    font-size:11.5px;
+    color:var(--muted);
+    line-height:1.5;
+    max-width:280px;
+  }
+
+  /* =========================================================
+     CHAT SCREEN
+  ========================================================= */
+  .chat-screen{ background:var(--background); }
+
+  .chat-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:14px 18px;
+    padding-top:max(14px, env(safe-area-inset-top));
+    background:rgba(255,255,255,.86);
+    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--border);
+    position:relative;
+    z-index:20;
+    flex:0 0 auto;
+  }
+  .header-left{ display:flex; align-items:center; gap:10px; min-width:0; }
+  .lock-badge{
+    width:36px; height:36px; border-radius:50%;
+    background:var(--accent-light);
+    display:flex; align-items:center; justify-content:center;
+    font-size:15px; flex:0 0 auto;
+  }
+  .header-left h1{ font-size:15.5px; margin:0; letter-spacing:-.01em; }
+  .status-text{ margin:1px 0 0; font-size:11.5px; color:var(--muted); }
+  #settingsBtn{
+    width:40px; height:40px; border-radius:50%;
+    border:none; background:transparent; color:var(--muted);
+    font-size:20px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition: background .15s ease, color .15s ease;
+  }
+  #settingsBtn:hover{ background:var(--surface-2); color:var(--text); }
+
+  .dropdown-menu{
+    position:absolute;
+    top:64px; right:14px;
+    z-index:40;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius-md);
+    box-shadow:var(--shadow-lg);
+    padding:6px;
+    min-width:220px;
+    display:flex; flex-direction:column;
+    transform-origin:top right;
+    animation: pop-in .16s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .dropdown-menu button{
+    display:flex; align-items:center; gap:10px;
+    border:none; background:transparent;
+    padding:11px 12px; border-radius:var(--radius-sm);
+    font-size:13.5px; color:var(--text); text-align:left;
+    cursor:pointer; min-height:40px;
+  }
+  .dropdown-menu button:hover{ background:var(--accent-light); }
+  .dropdown-menu button.danger{ color:var(--danger); }
+  .dropdown-menu button.danger:hover{ background:#fdeceb; }
+  .menu-divider{ height:1px; background:var(--border); margin:6px 4px; }
+
+  @keyframes pop-in{
+    from{ opacity:0; transform:scale(.92) translateY(-6px); }
+    to{ opacity:1; transform:scale(1) translateY(0); }
+  }
+
+  /* Messages */
+  .messages-container{
+    flex:1 1 auto;
+    overflow-y:auto;
+    overflow-x:hidden;
+    padding:18px 14px 100px;
+    scroll-behavior:smooth;
+    -webkit-overflow-scrolling:touch;
+  }
+  .date-separator{
+    display:flex; align-items:center; justify-content:center;
+    margin:22px 0 16px;
+  }
+  .date-separator:first-child{ margin-top:2px; }
+  .date-separator span{
+    font-size:11px; font-weight:700; letter-spacing:.06em;
+    color:var(--muted);
+    background:var(--surface-2);
+    padding:5px 12px;
+    border-radius:999px;
+    border:1px solid var(--border);
+  }
+
+  .msg-row{
+    display:flex; justify-content:center;
+    margin-bottom:12px;
+    animation: msg-in .22s cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes msg-in{
+    from{ opacity:0; transform:translateY(10px) scale(.98); }
+    to{ opacity:1; transform:translateY(0) scale(1); }
+  }
+
+  .bubble{
+    max-width:min(78%, 420px);
+    background:linear-gradient(160deg,#ffffff,#fbfbff);
+    border:1px solid var(--border);
+    border-radius:var(--radius-lg);
+    padding:12px 14px 9px;
+    box-shadow:var(--shadow-sm);
+    position:relative;
+  }
+  .bubble-text{
+    font-size:14.5px;
+    line-height:1.5;
+    white-space:pre-wrap;
+    word-break:break-word;
+    overflow-wrap:anywhere;
+    margin:0 0 6px;
+  }
+  .bubble-time{
+    display:block;
+    text-align:right;
+    font-size:10.5px;
+    color:var(--muted);
+  }
+
+  /* Voice bubble */
+  .voice-bubble{
+    max-width:82%;
+    width:280px;
+    background:linear-gradient(160deg,#ffffff,#fbfbff);
+    border:1px solid var(--border);
+    border-radius:var(--radius-lg);
+    padding:12px 14px 9px;
+    box-shadow:var(--shadow-sm);
+  }
+  .voice-row{
+    display:flex; align-items:center; gap:10px;
+  }
+  .voice-icon{
+    width:34px; height:34px; border-radius:50%;
+    background:var(--accent-light); color:var(--accent);
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; flex:0 0 auto;
+  }
+  .voice-play{
+    width:34px; height:34px; border-radius:50%;
+    border:none; background:var(--accent); color:#fff;
+    font-size:13px; cursor:pointer; flex:0 0 auto;
+    display:flex; align-items:center; justify-content:center;
+    transition: transform .12s ease, background .12s ease;
+  }
+  .voice-play:hover{ transform:scale(1.05); }
+  .voice-play:disabled{ opacity:.5; cursor:not-allowed; }
+  .voice-wave{
+    flex:1 1 auto;
+    display:flex; align-items:center; gap:2px;
+    height:26px;
+    min-width:0;
+    cursor:pointer;
+    position:relative;
+  }
+  .voice-wave-bar{
+    width:3px; border-radius:2px;
+    background:var(--border);
+    transition:background .2s ease;
+  }
+  .voice-wave-bar.played{ background:var(--accent); }
+  .voice-duration{
+    font-size:10.5px; color:var(--muted); flex:0 0 auto; min-width:34px; text-align:right;
+  }
+  .voice-meta{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-top:6px;
+  }
+  .voice-label{ font-size:11px; color:var(--muted); }
+  .voice-status{ font-size:11px; color:var(--muted); }
+  .voice-status.err{ color:var(--danger); }
+  .voice-bubble.is-error .voice-play{ background:var(--danger); }
+
+  /* Empty state */
+  .empty-state{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; color:var(--muted);
+    padding:60px 30px; gap:10px;
+    animation: rise .4s ease both;
+  }
+  .empty-state .e-icon{ font-size:34px; margin-bottom:4px; }
+  .empty-state h2{ font-size:16px; color:var(--text); margin:0; }
+  .empty-state p{ font-size:13px; margin:0; max-width:260px; line-height:1.5; }
+
+  @keyframes rise{
+    from{ opacity:0; transform:translateY(14px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+
+  /* Floating action button */
+  .fab-wrap{
+    position:absolute;
+    right:18px;
+    bottom:calc(20px + var(--safe-bottom));
+    display:flex; flex-direction:column; align-items:flex-end; gap:10px;
+    z-index:30;
+  }
+  .fab-btn{
+    width:56px; height:56px; border-radius:50%;
+    border:none;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    color:#fff; font-size:26px; font-weight:300;
+    cursor:pointer;
+    box-shadow:0 14px 28px -10px rgba(91,108,255,.65);
+    display:flex; align-items:center; justify-content:center;
+    transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s ease;
+  }
+  .fab-btn:hover{ transform:translateY(-2px) scale(1.03); }
+  .fab-btn.is-open{ transform:rotate(45deg); }
+  .fab-menu{
+    display:flex; flex-direction:column; gap:8px;
+    align-items:flex-end;
+  }
+  .fab-menu button{
+    display:flex; align-items:center; gap:8px;
+    border:none; background:var(--surface);
+    padding:11px 16px; border-radius:999px;
+    box-shadow:var(--shadow-md);
+    font-size:13.5px; font-weight:500; color:var(--text);
+    cursor:pointer; white-space:nowrap;
+    min-height:44px;
+    animation: pop-in .18s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .fab-menu button:nth-child(2){ animation-delay:.03s; }
+  .fab-menu button:hover{ background:var(--accent-light); }
+
+  /* =========================================================
+     MODALS
+  ========================================================= */
+  .modal-overlay{
+    position:absolute; inset:0;
+    background:rgba(20,22,30,.42);
+    backdrop-filter:blur(2px);
+    display:flex; align-items:flex-end; justify-content:center;
+    z-index:50;
+    animation: fade-in .18s ease both;
+  }
+  @media (min-width:560px){
+    .modal-overlay{ align-items:center; }
+  }
+  @keyframes fade-in{ from{ opacity:0; } to{ opacity:1; } }
+
+  .modal{
+    width:100%;
+    max-width:420px;
+    background:var(--surface);
+    border-radius:22px 22px 0 0;
+    padding:18px 18px calc(18px + var(--safe-bottom));
+    box-shadow:var(--shadow-lg);
+    animation: sheet-up .22s cubic-bezier(.2,.8,.2,1) both;
+    max-height:88dvh;
+    overflow-y:auto;
+  }
+  @media (min-width:560px){
+    .modal{ border-radius:20px; animation: pop-in .18s cubic-bezier(.2,.8,.2,1) both; }
+  }
+  @keyframes sheet-up{
+    from{ opacity:0; transform:translateY(30px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+  .modal-header{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:14px;
+  }
+  .modal-header h2{ font-size:16px; margin:0; }
+  .modal-close{
+    width:32px; height:32px; border-radius:50%;
+    border:none; background:var(--surface-2); color:var(--muted);
+    font-size:16px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .modal-close:hover{ background:var(--accent-light); color:var(--text); }
+
+  .field-label{
+    display:block; font-size:12.5px; font-weight:600;
+    color:var(--muted); margin-bottom:7px;
+  }
+  textarea, .text-input{
+    width:100%;
+    border:1px solid var(--border);
+    border-radius:var(--radius-md);
+    padding:12px 13px;
+    font-size:14.5px;
+    font-family:inherit;
+    color:var(--text);
+    background:var(--surface-2);
+    resize:none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  textarea:focus, .text-input:focus{
+    outline:none;
+    border-color:var(--accent);
+    box-shadow:0 0 0 3px var(--accent-light);
+  }
+  textarea{ min-height:120px; }
+  .char-counter{
+    text-align:right; font-size:11px; color:var(--muted); margin-top:6px;
+  }
+  .char-counter.warn{ color:var(--danger); }
+
+  .modal-footer{
+    display:flex; gap:10px; margin-top:16px;
+  }
+  .btn-secondary, .btn-ghost{
+    flex:1; padding:12px 16px; border-radius:var(--radius-md);
+    font-size:14px; font-weight:600; cursor:pointer; min-height:44px;
+  }
+  .btn-secondary{
+    border:1px solid var(--border); background:var(--surface);
+    color:var(--text);
+  }
+  .btn-secondary:hover{ background:var(--surface-2); }
+  .modal-footer .btn-primary{ flex:1; }
+
+  .field-error{
+    font-size:12px; color:var(--danger); margin-top:6px; min-height:16px;
+  }
+  .field-hint{ font-size:11.5px; color:var(--muted); margin-top:6px; line-height:1.5; }
+
+  .preview-slot{ margin-top:12px; }
+  .inline-spinner{
+    width:16px; height:16px; border-radius:50%;
+    border:2px solid var(--border); border-top-color:var(--accent);
+    animation: spin 1s linear infinite;
+    display:inline-block;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .about-body{ font-size:13px; line-height:1.7; color:var(--text); }
+  .about-body b{ font-weight:600; }
+  .about-body .warn-box{
+    background:#fff7e6; border:1px solid #f3d9a4; color:#7a5a12;
+    border-radius:var(--radius-sm); padding:10px 12px; margin-top:12px; font-size:12px; line-height:1.6;
+  }
+
+  /* Toasts */
+  .toast-container{
+    position:absolute;
+    top:max(14px, env(safe-area-inset-top));
+    left:0; right:0;
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+    z-index:80; pointer-events:none;
+  }
+  .toast{
+    background:rgba(22,24,29,.92);
+    color:#fff;
+    font-size:13px;
+    padding:10px 16px;
+    border-radius:999px;
+    box-shadow:var(--shadow-md);
+    animation: toast-in .25s cubic-bezier(.2,.8,.2,1) both;
+    max-width:88%;
+    text-align:center;
+  }
+  .toast.leaving{ animation: toast-out .2s ease both; }
+  @keyframes toast-in{ from{ opacity:0; transform:translateY(-8px); } to{ opacity:1; transform:translateY(0); } }
+  @keyframes toast-out{ to{ opacity:0; transform:translateY(-8px); } }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:.001s !important; animation-iteration-count:1 !important; transition-duration:.001s !important; }
+  }
+
+  /* Scrollbar (webkit) */
+  .messages-container::-webkit-scrollbar, .modal::-webkit-scrollbar{ width:6px; }
+  .messages-container::-webkit-scrollbar-thumb{ background:rgba(0,0,0,.12); border-radius:3px; }
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- =========================================================
+       LOCK SCREEN
+  ========================================================= -->
+  <section id="lockScreen" class="screen lock-screen" aria-label="Private space, locked">
+    <div class="lock-card">
+      <div class="lock-icon" aria-hidden="true">🔒</div>
+      <h1>Private Space</h1>
+      <p class="lock-sub" id="lockSub">Enter your PIN</p>
+
+      <!-- Visual PIN dots (decorative; the real value lives in JS state) -->
+      <div class="pin-dots" id="pinDots" aria-hidden="true"></div>
+
+      <!-- Hidden field so a physical/software keyboard can also type digits -->
+      <input
+        type="password"
+        id="pinInput"
+        class="sr-only"
+        inputmode="numeric"
+        pattern="[0-9]*"
+        autocomplete="off"
+        maxlength="4"
+        aria-label="Enter your PIN code"
+      >
+
+      <div class="pin-keypad" id="pinKeypad" role="group" aria-label="PIN keypad">
+        <!-- generated by JS -->
+      </div>
+
+      <button id="unlockBtn" class="btn-primary" type="button">Unlock</button>
+      <p id="pinError" class="pin-error" role="alert" aria-live="assertive"></p>
+
+      <p class="lock-footnote">
+        This PIN only gates the interface in your browser. It is not
+        server-side security — anyone with the page's source can inspect it.
+      </p>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       CHAT SCREEN
+  ========================================================= -->
+  <section id="chatScreen" class="screen chat-screen hidden" aria-label="Private messages">
+    <header class="chat-header">
+      <div class="header-left">
+        <span class="lock-badge" aria-hidden="true">🔒</span>
+        <div>
+          <h1>Private Space</h1>
+          <p class="status-text">Private • Unlocked</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <button id="settingsBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Open settings menu">⋮</button>
+      </div>
+    </header>
+
+    <div id="settingsMenu" class="dropdown-menu hidden" role="menu" aria-label="Settings">
+      <button role="menuitem" id="menuLock" type="button">🔒 &nbsp;Lock now</button>
+      <button role="menuitem" id="menuExport" type="button">⬇️ &nbsp;Export messages</button>
+      <div class="menu-divider"></div>
+      <button role="menuitem" id="menuClearLocal" type="button" class="danger">🧹 &nbsp;Clear local messages</button>
+      <button role="menuitem" id="menuReset" type="button" class="danger">♻️ &nbsp;Reset application</button>
+      <div class="menu-divider"></div>
+      <button role="menuitem" id="menuAbout" type="button">ℹ️ &nbsp;About</button>
+    </div>
+
+    <main id="messagesContainer" class="messages-container" tabindex="-1" aria-live="polite"></main>
+
+    <div class="fab-wrap">
+      <div id="fabMenu" class="fab-menu hidden" role="menu" aria-label="Add new content">
+        <button id="fabMessage" type="button" role="menuitem">💬 Message</button>
+        <button id="fabVoice" type="button" role="menuitem">🎙️ Voice</button>
+      </div>
+      <button id="fabBtn" class="fab-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Add new content">＋</button>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       ADD TEXT MESSAGE MODAL
+  ========================================================= -->
+  <div id="textModal" class="modal-overlay hidden">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="textModalTitle">
+      <div class="modal-header">
+        <h2 id="textModalTitle">New Message</h2>
+        <button class="modal-close" type="button" data-close="textModal" aria-label="Close">✕</button>
+      </div>
+      <label class="field-label" for="textInput">Write your message</label>
+      <textarea id="textInput" placeholder="Write your message…" maxlength="4000" aria-describedby="textCounter"></textarea>
+      <div class="char-counter" id="textCounter">0 / 4000</div>
+      <div class="modal-footer">
+        <button class="btn-secondary" type="button" data-close="textModal">Cancel</button>
+        <button class="btn-primary" id="saveTextBtn" type="button">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       ADD VOICE NOTE MODAL
+  ========================================================= -->
+  <div id="voiceModal" class="modal-overlay hidden">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="voiceModalTitle">
+      <div class="modal-header">
+        <h2 id="voiceModalTitle">Add Voice Note</h2>
+        <button class="modal-close" type="button" data-close="voiceModal" aria-label="Close">✕</button>
+      </div>
+      <label class="field-label" for="voiceUrlInput">GitHub audio URL</label>
+      <input type="url" id="voiceUrlInput" class="text-input" placeholder="https://github.com/user/repo/raw/main/audio/voice-001.mp3" autocomplete="off">
+      <div class="field-error" id="voiceUrlError"></div>
+
+      <div style="margin-top:10px;">
+        <button class="btn-secondary" id="previewVoiceBtn" type="button" style="width:100%;">Preview</button>
+      </div>
+
+      <div class="preview-slot" id="voicePreviewSlot"></div>
+
+      <p class="field-hint">Supports MP3, WAV, OGG and M4A (where your browser supports it). Preview it before adding — the URL itself is never shown in the chat.</p>
+
+      <div class="modal-footer">
+        <button class="btn-secondary" type="button" data-close="voiceModal">Cancel</button>
+        <button class="btn-primary" id="addVoiceBtn" type="button" disabled>Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       ABOUT MODAL
+  ========================================================= -->
+  <div id="aboutModal" class="modal-overlay hidden">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="aboutModalTitle">
+      <div class="modal-header">
+        <h2 id="aboutModalTitle">About Private Space</h2>
+        <button class="modal-close" type="button" data-close="aboutModal" aria-label="Close">✕</button>
+      </div>
+      <div class="about-body">
+        <p>Private Space is a single-file, one-way message archive. It runs
+        entirely in your browser — there is no server, database or account
+        system involved.</p>
+        <p><b>Permanent</b> messages live in this file's source code.
+        <b>Local</b> messages you add through the <b>+</b> button are saved
+        only in this browser's storage.</p>
+        <div class="warn-box">
+          <b>Security note:</b> the PIN screen only hides content inside this
+          page — it is a UI gate, not encryption or a server-side login.
+          Anyone with access to the page's source can read the PIN check and
+          the embedded messages. Do not rely on it for anything truly
+          sensitive unless the message data itself is encrypted first.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-primary" type="button" data-close="aboutModal">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+</div>
+
+<script>
+"use strict";
+
+/* =====================================================================
+   PRIVATE SPACE — single-file one-way chat
+   ---------------------------------------------------------------------
+   IMPORTANT SECURITY LIMITATION (read me):
+   This is a 100% static, client-side application. The PIN below is
+   checked with JavaScript that ships to the browser. That is a UI gate,
+   NOT server-side authentication and NOT encryption. Anyone who opens
+   the page's source can read this code, and — if they also know or
+   guess the PIN — can see whatever plaintext message data is embedded
+   in this file or in localStorage. Do not use this for content whose
+   exposure would be genuinely harmful. For real confidentiality,
+   encrypt message content before embedding it (see the ENCRYPTION
+   section near the bottom for a starting point using
+   window.crypto.subtle) and never assume a client-side password/PIN by
+   itself is unbreakable.
+===================================================================== */
+
+/* ---------------------------------------------------------------------
+   CONFIG
+--------------------------------------------------------------------- */
+const CONFIG = {
+  // SHA-256 hex digest of the correct PIN. Default PIN is "0909".
+  // To change it: open devtools console on this page and run e.g.
+  //   crypto.subtle.digest("SHA-256", new TextEncoder().encode("YOURPIN"))
+  //     .then(b => console.log([...new Uint8Array(b)]
+  //       .map(x => x.toString(16).padStart(2,"0")).join("")));
+  // then paste the printed hex string below.
+  PIN_HASH: "9552e277ebcc7fa191292c6e900d94dfe6e837d8abf76a2da927d4530d2c8f69",
+  PIN_LENGTH: 4,
+  AUTO_LOCK_MINUTES: 5,          // 0 disables auto-lock
+  LOCAL_STORAGE_KEY: "privateChatLocalMessages",
+  MAX_TEXT_LENGTH: 4000
+};
+
+/* ---------------------------------------------------------------------
+   PERMANENT (code-embedded) SAMPLE MESSAGES
+   Replace / extend this array with your own content, or use
+   "Export Messages" in the settings menu to get an updated block
+   after adding things through the UI.
+--------------------------------------------------------------------- */
+const messages = [
+  // Example of a text message entry:
+  // {
+  //   id: 1,
+  //   type: "text",
+  //   content: "Hello ❤️",
+  //   timestamp: "2026-09-28T18:30:00"
+  // }
+
+  // Example of a voice note entry — this is exactly where a GitHub
+  // raw audio URL goes. Uncomment and point it at your own file:
+  // {
+  //   id: 2,
+  //   type: "voice",
+  //   url: "https://github.com/USERNAME/REPOSITORY/raw/main/audio/voice-001.mp3",
+  //   timestamp: "2026-09-28T18:40:00"
+  // }
+];
+
+/* ---------------------------------------------------------------------
+   RUNTIME STATE
+--------------------------------------------------------------------- */
+const state = {
+  unlocked: false,
+  pinBuffer: "",
+  pinRevealed: false,
+  combinedMessages: [],
+  localMessages: [],
+  nextLocalId: 1,
+  activeAudio: null,        // { player, els } of the currently playing voice note
+  inactivityTimer: null,
+  previewAudio: null,
+  previewResolvedUrl: null
+};
+
+/* =====================================================================
+   INITIALIZATION
+===================================================================== */
+function initializeApp(){
+  buildPinKeypad();
+  loadMessages();
+  wireLockScreenEvents();
+  wireChatScreenEvents();
+  wireModalEvents();
+  wireGlobalEvents();
+  document.getElementById("pinInput").focus({ preventScroll:true });
+}
+
+document.addEventListener("DOMContentLoaded", initializeApp);
+
+/* =====================================================================
+   PIN / LOCK SCREEN
+===================================================================== */
+function buildPinKeypad(){
+  const keypad = document.getElementById("pinKeypad");
+  const layout = ["1","2","3","4","5","6","7","8","9","show","0","back"];
+  keypad.innerHTML = "";
+  layout.forEach(key => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "pin-key";
+    if (key === "show"){
+      btn.classList.add("pin-key-ghost");
+      btn.id = "pinShowToggle";
+      btn.textContent = "Show";
+      btn.setAttribute("aria-label","Show PIN digits");
+      btn.addEventListener("click", togglePinReveal);
+    } else if (key === "back"){
+      btn.classList.add("pin-key-ghost");
+      btn.textContent = "⌫";
+      btn.setAttribute("aria-label","Delete last digit");
+      btn.addEventListener("click", () => updatePinBuffer(state.pinBuffer.slice(0,-1)));
+    } else {
+      btn.textContent = key;
+      btn.setAttribute("aria-label", "Digit " + key);
+      btn.addEventListener("click", () => {
+        if (state.pinBuffer.length < CONFIG.PIN_LENGTH){
+          updatePinBuffer(state.pinBuffer + key);
+        }
+      });
+    }
+    keypad.appendChild(btn);
+  });
+  renderPinDots();
+}
+
+function wireLockScreenEvents(){
+  const pinInput = document.getElementById("pinInput");
+  const unlockBtn = document.getElementById("unlockBtn");
+
+  pinInput.addEventListener("input", () => {
+    const digitsOnly = pinInput.value.replace(/\D/g,"").slice(0, CONFIG.PIN_LENGTH);
+    updatePinBuffer(digitsOnly, { skipMirror:true });
+  });
+
+  pinInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") attemptUnlock();
+  });
+
+  unlockBtn.addEventListener("click", attemptUnlock);
+
+  // Allow physical keyboard digit entry even while focus is elsewhere
+  // on the lock screen (e.g. right after a shake animation).
+  document.getElementById("lockScreen").addEventListener("keydown", (e) => {
+    if (document.activeElement === pinInput) return;
+    if (/^[0-9]$/.test(e.key) && state.pinBuffer.length < CONFIG.PIN_LENGTH){
+      updatePinBuffer(state.pinBuffer + e.key);
+    } else if (e.key === "Backspace"){
+      updatePinBuffer(state.pinBuffer.slice(0,-1));
+    } else if (e.key === "Enter"){
+      attemptUnlock();
+    }
+  });
+}
+
+function updatePinBuffer(next, opts){
+  opts = opts || {};
+  state.pinBuffer = next;
+  if (!opts.skipMirror){
+    document.getElementById("pinInput").value = next;
+  }
+  clearPinError();
+  renderPinDots();
+  if (state.pinBuffer.length === CONFIG.PIN_LENGTH){
+    attemptUnlock();
+  }
+}
+
+function renderPinDots(){
+  const wrap = document.getElementById("pinDots");
+  wrap.innerHTML = "";
+  for (let i = 0; i < CONFIG.PIN_LENGTH; i++){
+    const dot = document.createElement("span");
+    const filled = i < state.pinBuffer.length;
+    dot.className = "pin-dot" + (filled ? " filled" : "") + (filled && state.pinRevealed ? " reveal" : "");
+    if (filled && state.pinRevealed){
+      dot.textContent = state.pinBuffer[i];
+      dot.classList.remove("filled");
+    }
+    wrap.appendChild(dot);
+  }
+}
+
+function togglePinReveal(){
+  state.pinRevealed = !state.pinRevealed;
+  const btn = document.getElementById("pinShowToggle");
+  btn.textContent = state.pinRevealed ? "Hide" : "Show";
+  document.getElementById("pinInput").type = state.pinRevealed ? "text" : "password";
+  renderPinDots();
+}
+
+async function sha256Hex(text){
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
+}
+
+async function attemptUnlock(){
+  if (state.pinBuffer.length === 0) return;
+  const unlockBtn = document.getElementById("unlockBtn");
+  unlockBtn.disabled = true;
+  try{
+    const hash = await sha256Hex(state.pinBuffer);
+    if (hash === CONFIG.PIN_HASH){
+      unlockApp();
+    } else {
+      showPinError("Incorrect PIN. Try again.");
+      shakePinDots();
+      resetPinBuffer();
+    }
+  } catch(err){
+    // crypto.subtle can be unavailable on non-secure origins (http, not
+    // localhost/https). Fail safely rather than crashing the app.
+    showPinError("Unable to verify PIN in this browser context.");
+    resetPinBuffer();
+  } finally {
+    unlockBtn.disabled = false;
+  }
+}
+
+function showPinError(msg){
+  const el = document.getElementById("pinError");
+  el.textContent = msg;
+  el.classList.add("show");
+}
+function clearPinError(){
+  const el = document.getElementById("pinError");
+  el.classList.remove("show");
+}
+
+function shakePinDots(){
+  const wrap = document.getElementById("pinDots");
+  wrap.classList.remove("shake");
+  // force reflow so the animation can restart
+  void wrap.offsetWidth;
+  wrap.classList.add("shake");
+}
+
+function resetPinBuffer(){
+  state.pinBuffer = "";
+  state.pinRevealed = false;
+  const input = document.getElementById("pinInput");
+  input.value = "";
+  input.type = "password";
+  const toggle = document.getElementById("pinShowToggle");
+  if (toggle) toggle.textContent = "Show";
+  renderPinDots();
+}
+
+function unlockApp(){
+  state.unlocked = true;
+  resetPinBuffer();
+  clearPinError();
+  document.getElementById("lockScreen").classList.add("hidden");
+  document.getElementById("chatScreen").classList.remove("hidden");
+  renderMessages();
+  scrollMessagesToBottom(false);
+  resetInactivityTimer();
+  showToast("Unlocked");
+}
+
+function lockApp(){
+  state.unlocked = false;
+  clearInactivityTimer();
+  closeSettingsMenu();
+  closeFabMenu();
+  stopActiveAudio();
+  // Clear rendered content from the DOM while locked, since keeping it
+  // in memory/DOM defeats the point of the lock screen.
+  document.getElementById("messagesContainer").innerHTML = "";
+  document.getElementById("chatScreen").classList.add("hidden");
+  document.getElementById("lockScreen").classList.remove("hidden");
+  document.getElementById("pinInput").focus({ preventScroll:true });
+}
+
+/* =====================================================================
+   MESSAGE LOADING / PERSISTENCE
+===================================================================== */
+function loadMessages(){
+  state.localMessages = loadLocalMessages();
+  const maxCodeId = messages.reduce((m, x) => Math.max(m, x.id || 0), 0);
+  const maxLocalId = state.localMessages.reduce((m, x) => Math.max(m, x.id || 0), 0);
+  state.nextLocalId = Math.max(maxCodeId, maxLocalId) + 1;
+  recombineMessages();
+}
+
+function loadLocalMessages(){
+  const raw = localStorage.getItem(CONFIG.LOCAL_STORAGE_KEY);
+  if (!raw) return [];
+  try{
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) throw new Error("not an array");
+    return parsed.filter(isValidMessageShape);
+  } catch(err){
+    // Corrupted data: drop it and keep going with code-based messages only.
+    localStorage.removeItem(CONFIG.LOCAL_STORAGE_KEY);
+    return [];
+  }
+}
+
+function isValidMessageShape(m){
+  if (!m || typeof m !== "object") return false;
+  if (!m.id || !m.timestamp) return false;
+  if (m.type === "text") return typeof m.content === "string" && m.content.length > 0;
+  if (m.type === "voice") return typeof m.url === "string" && m.url.length > 0;
+  return false;
+}
+
+function saveLocalMessages(){
+  try{
+    localStorage.setItem(CONFIG.LOCAL_STORAGE_KEY, JSON.stringify(state.localMessages));
+  } catch(err){
+    showToast("Could not save locally (storage unavailable)");
+  }
+}
+
+function recombineMessages(){
+  const seen = new Set();
+  const combined = [];
+  [...messages, ...state.localMessages].forEach(m => {
+    if (!isValidMessageShape(m)) return;
+    const key = m.type + ":" + m.id;
+    if (seen.has(key)) return; // avoid duplicates
+    seen.add(key);
+    combined.push(m);
+  });
+  combined.sort((a,b) => new Date(a.timestamp) - new Date(b.timestamp));
+  state.combinedMessages = combined;
+}
+
+/* =====================================================================
+   RENDERING
+===================================================================== */
+function renderMessages(){
+  const container = document.getElementById("messagesContainer");
+  container.innerHTML = "";
+
+  if (state.combinedMessages.length === 0){
+    container.appendChild(buildEmptyState());
+    return;
+  }
+
+  let lastDateKey = null;
+  state.combinedMessages.forEach(msg => {
+    const d = new Date(msg.timestamp);
+    if (isNaN(d.getTime())) return; // skip unparsable dates defensively
+
+    const dateKey = d.toDateString();
+    if (dateKey !== lastDateKey){
+      container.appendChild(buildDateSeparator(d));
+      lastDateKey = dateKey;
+    }
+
+    const row = document.createElement("div");
+    row.className = "msg-row";
+    row.appendChild(msg.type === "voice" ? renderVoiceMessage(msg) : renderTextMessage(msg));
+    container.appendChild(row);
+  });
+}
+
+function buildEmptyState(){
+  const wrap = document.createElement("div");
+  wrap.className = "empty-state";
+  wrap.innerHTML =
+    '<div class="e-icon">🕊️</div>' +
+    "<h2>Nothing here yet</h2>" +
+    "<p>Use the + button below to add your first message or voice note.</p>";
+  return wrap;
+}
+
+function buildDateSeparator(date){
+  const wrap = document.createElement("div");
+  wrap.className = "date-separator";
+  const span = document.createElement("span");
+  span.textContent = formatDateSeparator(date);
+  wrap.appendChild(span);
+  return wrap;
+}
+
+function formatDateSeparator(date){
+  const now = new Date();
+  const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((startOfDay(now) - startOfDay(date)) / 86400000);
+  if (diffDays === 0) return "TODAY";
+  if (diffDays === 1) return "YESTERDAY";
+  return date.toLocaleDateString(undefined, { day:"numeric", month:"long", year:"numeric" }).toUpperCase();
+}
+
+function formatMessageTime(date){
+  return date.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+}
+
+function renderTextMessage(msg){
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  const p = document.createElement("p");
+  p.className = "bubble-text";
+  p.textContent = msg.content; // textContent -> safe from HTML injection
+  const time = document.createElement("span");
+  time.className = "bubble-time";
+  time.textContent = formatMessageTime(new Date(msg.timestamp));
+  bubble.appendChild(p);
+  bubble.appendChild(time);
+  return bubble;
+}
+
+function renderVoiceMessage(msg){
+  const bubble = document.createElement("div");
+  bubble.className = "voice-bubble";
+  bubble.dataset.msgId = String(msg.id);
+
+  const row = document.createElement("div");
+  row.className = "voice-row";
+
+  const icon = document.createElement("div");
+  icon.className = "voice-icon";
+  icon.textContent = "🎙️";
+  icon.setAttribute("aria-hidden","true");
+
+  const playBtn = document.createElement("button");
+  playBtn.className = "voice-play";
+  playBtn.type = "button";
+  playBtn.textContent = "▶";
+  playBtn.setAttribute("aria-label","Play voice message");
+  playBtn.disabled = true; // enabled once metadata loads
+
+  const wave = document.createElement("div");
+  wave.className = "voice-wave";
+  wave.setAttribute("role","slider");
+  wave.setAttribute("aria-label","Playback position");
+  wave.setAttribute("tabindex","0");
+  const bars = [];
+  const barCount = 24;
+  for (let i=0;i<barCount;i++){
+    const bar = document.createElement("div");
+    bar.className = "voice-wave-bar";
+    // decorative pseudo-random heights, deterministic per index
+    const h = 6 + Math.round(Math.abs(Math.sin(i * 12.9898 + msg.id)) * 16);
+    bar.style.height = h + "px";
+    wave.appendChild(bar);
+    bars.push(bar);
+  }
+
+  const duration = document.createElement("span");
+  duration.className = "voice-duration";
+  duration.textContent = "--:--";
+
+  row.appendChild(icon);
+  row.appendChild(playBtn);
+  row.appendChild(wave);
+  row.appendChild(duration);
+
+  const meta = document.createElement("div");
+  meta.className = "voice-meta";
+  const label = document.createElement("span");
+  label.className = "voice-label";
+  label.textContent = "Voice message";
+  const status = document.createElement("span");
+  status.className = "voice-status";
+  status.textContent = "Loading…";
+  meta.appendChild(label);
+  meta.appendChild(status);
+
+  const time = document.createElement("span");
+  time.className = "bubble-time";
+  time.textContent = formatMessageTime(new Date(msg.timestamp));
+
+  bubble.appendChild(row);
+  bubble.appendChild(meta);
+  bubble.appendChild(time);
+
+  setupVoicePlayer({ bubble, playBtn, wave, bars, duration, status, url: msg.url });
+
+  return bubble;
+}
+
+/* ---- Custom voice player wiring (lazy: <audio> created on demand) ---- */
+function setupVoicePlayer(ctx){
+  let audio = null;
+  let ready = false;
+  let rafId = null;
+
+  function setError(msg){
+    ctx.status.textContent = msg || "Couldn't load audio";
+    ctx.status.classList.add("err");
+    ctx.bubble.classList.add("is-error");
+    ctx.playBtn.disabled = true;
+  }
+
+  function ensureAudio(){
+    if (audio) return audio;
+    audio = new Audio();
+    audio.preload = "metadata";
+    audio.src = ctx.url;
+
+    audio.addEventListener("loadedmetadata", () => {
+      ready = true;
+      ctx.duration.textContent = formatSeconds(audio.duration);
+      ctx.status.textContent = "Voice message";
+      ctx.status.classList.remove("err");
+      ctx.playBtn.disabled = false;
+    });
+    audio.addEventListener("timeupdate", () => updateWaveProgress(ctx, audio));
+    audio.addEventListener("ended", () => {
+      ctx.playBtn.textContent = "▶";
+      ctx.playBtn.setAttribute("aria-label","Play voice message");
+      if (state.activeAudio && state.activeAudio.player === audio) state.activeAudio = null;
+      updateWaveProgress(ctx, audio, true);
+    });
+    audio.addEventListener("error", () => setError("Audio unavailable"));
+    return audio;
+  }
+
+  ctx.playBtn.addEventListener("click", () => {
+    const a = ensureAudio();
+    if (a.paused){
+      stopActiveAudio();
+      a.play().then(() => {
+        ctx.playBtn.textContent = "❚❚";
+        ctx.playBtn.setAttribute("aria-label","Pause voice message");
+        state.activeAudio = { player:a, ctx };
+      }).catch(() => setError("Playback blocked"));
+    } else {
+      a.pause();
+      ctx.playBtn.textContent = "▶";
+      ctx.playBtn.setAttribute("aria-label","Play voice message");
+      if (state.activeAudio && state.activeAudio.player === a) state.activeAudio = null;
+    }
+  });
+
+  ctx.wave.addEventListener("click", (e) => {
+    if (!ready) return;
+    const rect = ctx.wave.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    const a = ensureAudio();
+    if (!isNaN(a.duration)) a.currentTime = ratio * a.duration;
+    updateWaveProgress(ctx, a);
+  });
+
+  ctx.wave.addEventListener("keydown", (e) => {
+    if (!ready) return;
+    const a = ensureAudio();
+    if (e.key === "ArrowRight"){ a.currentTime = Math.min(a.duration, a.currentTime + 5); }
+    else if (e.key === "ArrowLeft"){ a.currentTime = Math.max(0, a.currentTime - 5); }
+    else return;
+    e.preventDefault();
+    updateWaveProgress(ctx, a);
+  });
+
+  // Kick off a lightweight metadata probe immediately so duration /
+  // error state show up before the user taps play.
+  ensureAudio();
+}
+
+function updateWaveProgress(ctx, audio, forceZero){
+  const ratio = forceZero ? 0 : (audio.duration ? audio.currentTime / audio.duration : 0);
+  const filledCount = Math.round(ratio * ctx.bars.length);
+  ctx.bars.forEach((bar, i) => bar.classList.toggle("played", i < filledCount));
+  if (!forceZero && audio.duration){
+    const remaining = audio.duration - audio.currentTime;
+    ctx.duration.textContent = formatSeconds(remaining);
+  } else if (audio.duration){
+    ctx.duration.textContent = formatSeconds(audio.duration);
+  }
+}
+
+function formatSeconds(total){
+  if (!isFinite(total) || total < 0) return "--:--";
+  const m = Math.floor(total / 60);
+  const s = Math.floor(total % 60);
+  return m + ":" + String(s).padStart(2,"0");
+}
+
+function stopActiveAudio(){
+  if (state.activeAudio && state.activeAudio.player){
+    state.activeAudio.player.pause();
+    const ctx = state.activeAudio.ctx;
+    if (ctx){
+      ctx.playBtn.textContent = "▶";
+      ctx.playBtn.setAttribute("aria-label","Play voice message");
+    }
+  }
+  state.activeAudio = null;
+}
+
+function scrollMessagesToBottom(smooth){
+  const container = document.getElementById("messagesContainer");
+  container.scrollTo({ top: container.scrollHeight, behavior: smooth === false ? "auto" : "smooth" });
+}
+
+/* =====================================================================
+   HEADER / SETTINGS MENU
+===================================================================== */
+function wireChatScreenEvents(){
+  document.getElementById("settingsBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleSettingsMenu();
+  });
+  document.getElementById("menuLock").addEventListener("click", () => { closeSettingsMenu(); lockApp(); });
+  document.getElementById("menuExport").addEventListener("click", () => { closeSettingsMenu(); exportMessages(); });
+  document.getElementById("menuClearLocal").addEventListener("click", () => { closeSettingsMenu(); clearLocalMessages(); });
+  document.getElementById("menuReset").addEventListener("click", () => { closeSettingsMenu(); resetApplication(); });
+  document.getElementById("menuAbout").addEventListener("click", () => { closeSettingsMenu(); openModal("aboutModal"); });
+
+  document.getElementById("fabBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleFabMenu();
+  });
+  document.getElementById("fabMessage").addEventListener("click", () => { closeFabMenu(); openTextModal(); });
+  document.getElementById("fabVoice").addEventListener("click", () => { closeFabMenu(); openVoiceModal(); });
+}
+
+function toggleSettingsMenu(){
+  const menu = document.getElementById("settingsMenu");
+  const btn = document.getElementById("settingsBtn");
+  const willOpen = menu.classList.contains("hidden");
+  closeFabMenu();
+  menu.classList.toggle("hidden", !willOpen);
+  btn.setAttribute("aria-expanded", String(willOpen));
+}
+function closeSettingsMenu(){
+  document.getElementById("settingsMenu").classList.add("hidden");
+  document.getElementById("settingsBtn").setAttribute("aria-expanded","false");
+}
+
+function toggleFabMenu(){
+  const menu = document.getElementById("fabMenu");
+  const btn = document.getElementById("fabBtn");
+  const willOpen = menu.classList.contains("hidden");
+  closeSettingsMenu();
+  menu.classList.toggle("hidden", !willOpen);
+  btn.classList.toggle("is-open", willOpen);
+  btn.setAttribute("aria-expanded", String(willOpen));
+}
+function closeFabMenu(){
+  document.getElementById("fabMenu").classList.add("hidden");
+  const btn = document.getElementById("fabBtn");
+  btn.classList.remove("is-open");
+  btn.setAttribute("aria-expanded","false");
+}
+
+/* =====================================================================
+   MODALS — shared open/close helpers
+===================================================================== */
+function wireModalEvents(){
+  document.querySelectorAll("[data-close]").forEach(btn => {
+    btn.addEventListener("click", () => closeModal(btn.dataset.close));
+  });
+  document.querySelectorAll(".modal-overlay").forEach(overlay => {
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) closeModal(overlay.id);
+    });
+  });
+
+  // Text modal specifics
+  const textInput = document.getElementById("textInput");
+  textInput.addEventListener("input", updateTextCounter);
+  textInput.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") addTextMessage();
+  });
+  document.getElementById("saveTextBtn").addEventListener("click", addTextMessage);
+
+  // Voice modal specifics
+  document.getElementById("previewVoiceBtn").addEventListener("click", previewVoiceUrl);
+  document.getElementById("addVoiceBtn").addEventListener("click", addVoiceMessage);
+}
+
+function getOpenModal(){
+  return Array.from(document.querySelectorAll(".modal-overlay")).find(m => !m.classList.contains("hidden")) || null;
+}
+
+function openModal(id){
+  closeSettingsMenu();
+  closeFabMenu();
+  document.getElementById(id).classList.remove("hidden");
+  const focusable = document.querySelector("#" + id + " textarea, #" + id + " input, #" + id + " button");
+  if (focusable) focusable.focus({ preventScroll:true });
+}
+
+function closeModal(id){
+  document.getElementById(id).classList.add("hidden");
+  if (id === "voiceModal") resetVoiceModal();
+  if (id === "textModal") resetTextModal();
+}
+
+function wireGlobalEvents(){
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const openModalEl = getOpenModal();
+    if (openModalEl){ closeModal(openModalEl.id); return; }
+    if (!document.getElementById("fabMenu").classList.contains("hidden")) closeFabMenu();
+    if (!document.getElementById("settingsMenu").classList.contains("hidden")) closeSettingsMenu();
+  });
+
+  document.addEventListener("click", (e) => {
+    const settingsMenu = document.getElementById("settingsMenu");
+    const settingsBtn = document.getElementById("settingsBtn");
+    if (!settingsMenu.classList.contains("hidden") && !settingsMenu.contains(e.target) && e.target !== settingsBtn){
+      closeSettingsMenu();
+    }
+    const fabMenu = document.getElementById("fabMenu");
+    const fabBtn = document.getElementById("fabBtn");
+    if (!fabMenu.classList.contains("hidden") && !fabMenu.contains(e.target) && e.target !== fabBtn){
+      closeFabMenu();
+    }
+  });
+
+  // Auto-lock on inactivity
+  ["pointerdown","keydown","touchstart","scroll"].forEach(evt => {
+    document.addEventListener(evt, () => { if (state.unlocked) resetInactivityTimer(); }, { passive:true });
+  });
+
+  window.addEventListener("beforeunload", () => { stopActiveAudio(); });
+}
+
+function resetInactivityTimer(){
+  clearInactivityTimer();
+  if (!CONFIG.AUTO_LOCK_MINUTES) return;
+  state.inactivityTimer = setTimeout(() => {
+    if (state.unlocked){
+      lockApp();
+      showToast("Locked after inactivity");
+    }
+  }, CONFIG.AUTO_LOCK_MINUTES * 60 * 1000);
+}
+function clearInactivityTimer(){
+  if (state.inactivityTimer){ clearTimeout(state.inactivityTimer); state.inactivityTimer = null; }
+}
+
+/* =====================================================================
+   ADD TEXT MESSAGE
+===================================================================== */
+function openTextModal(){
+  resetTextModal();
+  openModal("textModal");
+}
+function resetTextModal(){
+  const textarea = document.getElementById("textInput");
+  textarea.value = "";
+  updateTextCounter();
+}
+function updateTextCounter(){
+  const textarea = document.getElementById("textInput");
+  const counter = document.getElementById("textCounter");
+  const len = textarea.value.length;
+  counter.textContent = len + " / " + CONFIG.MAX_TEXT_LENGTH;
+  counter.classList.toggle("warn", len >= CONFIG.MAX_TEXT_LENGTH);
+}
+
+function addTextMessage(){
+  const textarea = document.getElementById("textInput");
+  const content = textarea.value.trim();
+  if (!content){
+    showToast("Message can't be empty");
+    return;
+  }
+  const msg = {
+    id: state.nextLocalId++,
+    type: "text",
+    content: content.slice(0, CONFIG.MAX_TEXT_LENGTH),
+    timestamp: new Date().toISOString()
+  };
+  state.localMessages.push(msg);
+  saveLocalMessages();
+  recombineMessages();
+  renderMessages();
+  scrollMessagesToBottom(true);
+  closeModal("textModal");
+  showToast("Message added");
+}
+
+/* =====================================================================
+   ADD VOICE NOTE
+===================================================================== */
+function openVoiceModal(){
+  resetVoiceModal();
+  openModal("voiceModal");
+}
+function resetVoiceModal(){
+  document.getElementById("voiceUrlInput").value = "";
+  document.getElementById("voiceUrlError").textContent = "";
+  document.getElementById("voicePreviewSlot").innerHTML = "";
+  document.getElementById("addVoiceBtn").disabled = true;
+  state.previewResolvedUrl = null;
+  if (state.previewAudio){
+    state.previewAudio.pause();
+    state.previewAudio = null;
+  }
+}
+
+// GitHub's normal file page ("blob") links serve an HTML viewer, not the
+// raw bytes — <audio> can't play those. Transparently rewrite them to the
+// equivalent raw.githubusercontent.com link so pasting a link copied from
+// the browser's address bar just works.
+function normalizeGithubUrl(url){
+  try{
+    const u = new URL(url);
+    if (/(^|\.)github\.com$/i.test(u.hostname)){
+      const parts = u.pathname.split("/").filter(Boolean); // [user, repo, "blob"|"raw", branch, ...path]
+      if (parts.length >= 4 && (parts[2] === "blob" || parts[2] === "raw")){
+        const [user, repo, , branch, ...rest] = parts;
+        return "https://raw.githubusercontent.com/" + [user, repo, branch, ...rest].join("/");
+      }
+    }
+  } catch(err){ /* not a valid URL — caller's own validation handles this */ }
+  return url;
+}
+
+function previewVoiceUrl(){
+  const input = document.getElementById("voiceUrlInput");
+  const errorEl = document.getElementById("voiceUrlError");
+  const slot = document.getElementById("voicePreviewSlot");
+  const addBtn = document.getElementById("addVoiceBtn");
+  const url = input.value.trim();
+
+  errorEl.textContent = "";
+  addBtn.disabled = true;
+  slot.innerHTML = '<span class="inline-spinner" aria-hidden="true"></span> <span style="font-size:12.5px;color:var(--muted);">Loading preview…</span>';
+
+  if (!url){
+    errorEl.textContent = "Please paste a URL first.";
+    slot.innerHTML = "";
+    return;
+  }
+  let resolvedUrl;
+  try{
+    new URL(url);
+    resolvedUrl = normalizeGithubUrl(url);
+  } catch(err){
+    errorEl.textContent = "That doesn't look like a valid URL.";
+    slot.innerHTML = "";
+    return;
+  }
+  state.previewResolvedUrl = resolvedUrl;
+
+  if (state.previewAudio){ state.previewAudio.pause(); }
+  const audio = new Audio();
+  state.previewAudio = audio;
+  audio.preload = "metadata";
+  audio.src = resolvedUrl;
+
+  audio.addEventListener("loadedmetadata", () => {
+    if (state.previewAudio !== audio) return; // stale
+    slot.innerHTML = "";
+    if (resolvedUrl !== url){
+      const note = document.createElement("p");
+      note.className = "field-hint";
+      note.style.margin = "0 0 8px";
+      note.textContent = "Detected a GitHub file page link — using its direct/raw version instead.";
+      slot.appendChild(note);
+    }
+    const box = document.createElement("div");
+    box.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2);";
+    const playBtn = document.createElement("button");
+    playBtn.type = "button";
+    playBtn.className = "voice-play";
+    playBtn.textContent = "▶";
+    playBtn.setAttribute("aria-label","Play preview");
+    const durationLabel = document.createElement("span");
+    durationLabel.style.cssText = "font-size:12px;color:var(--muted);";
+    durationLabel.textContent = "Duration: " + formatSeconds(audio.duration);
+    playBtn.addEventListener("click", () => {
+      if (audio.paused){
+        audio.play().catch(() => { errorEl.textContent = "Playback blocked by the browser."; });
+        playBtn.textContent = "❚❚";
+      } else {
+        audio.pause();
+        playBtn.textContent = "▶";
+      }
+    });
+    audio.addEventListener("ended", () => { playBtn.textContent = "▶"; });
+    box.appendChild(playBtn);
+    box.appendChild(durationLabel);
+    slot.appendChild(box);
+    addBtn.disabled = false;
+  });
+
+  audio.addEventListener("error", () => {
+    if (state.previewAudio !== audio) return;
+    slot.innerHTML = "";
+    errorEl.textContent = "Couldn't load audio from that URL. Double-check it's a direct/raw link.";
+    addBtn.disabled = true;
+  });
+}
+
+function addVoiceMessage(){
+  const input = document.getElementById("voiceUrlInput");
+  const errorEl = document.getElementById("voiceUrlError");
+  const url = input.value.trim();
+
+  if (!url){
+    errorEl.textContent = "Please paste and preview a URL first.";
+    return;
+  }
+  try{ new URL(url); } catch(err){
+    errorEl.textContent = "That doesn't look like a valid URL.";
+    return;
+  }
+  // Reuse the exact URL that was just previewed successfully when it
+  // matches, otherwise resolve fresh (still handles GitHub blob links).
+  const resolvedUrl = (state.previewResolvedUrl && normalizeGithubUrl(url) === state.previewResolvedUrl)
+    ? state.previewResolvedUrl
+    : normalizeGithubUrl(url);
+
+  const msg = {
+    id: state.nextLocalId++,
+    type: "voice",
+    url: resolvedUrl,
+    timestamp: new Date().toISOString()
+  };
+  state.localMessages.push(msg);
+  saveLocalMessages();
+  recombineMessages();
+  renderMessages();
+  scrollMessagesToBottom(true);
+  closeModal("voiceModal");
+  showToast("Voice note added");
+}
+
+/* =====================================================================
+   SETTINGS ACTIONS: export / clear / reset
+===================================================================== */
+function exportMessages(){
+  const exportable = state.combinedMessages.map(m => {
+    return m.type === "voice"
+      ? { id:m.id, type:"voice", url:m.url, timestamp:m.timestamp }
+      : { id:m.id, type:"text", content:m.content, timestamp:m.timestamp };
+  });
+
+  const code = "const messages = " + JSON.stringify(exportable, null, 2) + ";\n";
+  const header =
+    "// Exported from Private Space on " + new Date().toISOString() + "\n" +
+    "// Paste this block over the `messages` array in index.html, then\n" +
+    "// redeploy to GitHub Pages. This file does NOT modify your GitHub\n" +
+    "// repository automatically — that step is manual.\n\n";
+  const fileContents = header + code;
+
+  // Try clipboard first, then always offer a download regardless.
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(fileContents).then(() => {
+      showToast("Copied to clipboard — and downloading messages.js");
+    }).catch(() => { /* clipboard denied; download still happens below */ });
+  }
+
+  try{
+    const blob = new Blob([fileContents], { type:"text/javascript" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "messages.js";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  } catch(err){
+    showToast("Export failed — try copying from the clipboard instead");
+  }
+}
+
+function clearLocalMessages(){
+  if (state.localMessages.length === 0){
+    showToast("No local messages to clear");
+    return;
+  }
+  state.localMessages = [];
+  saveLocalMessages();
+  recombineMessages();
+  renderMessages();
+  showToast("Local messages cleared");
+}
+
+function resetApplication(){
+  try{ localStorage.removeItem(CONFIG.LOCAL_STORAGE_KEY); } catch(err){ /* ignore */ }
+  state.localMessages = [];
+  recombineMessages();
+  renderMessages();
+  lockApp();
+  showToast("Application reset");
+}
+
+/* =====================================================================
+   TOASTS
+===================================================================== */
+function showToast(message){
+  const container = document.getElementById("toastContainer");
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add("leaving");
+    setTimeout(() => toast.remove(), 220);
+  }, 2200);
+}
+
+/* =====================================================================
+   OPTIONAL ENCRYPTION ARCHITECTURE (not enabled by default)
+   ---------------------------------------------------------------------
+   If you want stronger privacy than the PIN gate above provides, this
+   is where an encrypted-message pipeline would plug in:
+
+     1. Derive a key from the PIN with PBKDF2:
+          const keyMaterial = await crypto.subtle.importKey(
+            "raw", new TextEncoder().encode(pin), "PBKDF2", false, ["deriveKey"]);
+          const key = await crypto.subtle.deriveKey(
+            { name:"PBKDF2", salt, iterations:150000, hash:"SHA-256" },
+            keyMaterial, { name:"AES-GCM", length:256 }, false, ["decrypt"]);
+
+     2. Store each message's `content`/`url` as base64 ciphertext + a
+        per-message IV instead of plaintext, and decrypt with
+        crypto.subtle.decrypt("AES-GCM", ...) right before rendering.
+
+   This scaffold intentionally is NOT wired up by default: it adds real
+   complexity, and a lost/forgotten PIN would make old messages
+   permanently unreadable. Prioritize reliability unless you specifically
+   need this.
+===================================================================== */
+
+</script>
+</body>
+</html>
